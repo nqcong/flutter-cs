@@ -23,7 +23,7 @@ class _AppCoordinatorState extends State<AppCoordinator> {
   static const double _tabBarHeight = 90.0;
   static const double _backgroundHeight = 45.0;
 
-  // Dependencies - using factory
+  // Dependencies
   late final ContactRepository _contactRepository;
   late final NavigationHelper _navigationHelper;
 
@@ -50,18 +50,13 @@ class _AppCoordinatorState extends State<AppCoordinator> {
     try {
       print('Starting data initialization...');
 
+      // Initialize sample data directly from data source
       final dataSource = ContactLocalDataSource();
-
-      // Debug: print file path
-      await dataSource.printFilePath();
-
-      // Initialize sample data if needed
       await dataSource.initializeWithSampleData();
 
       print('Data initialization complete');
     } catch (e) {
       print('Error during initialization: $e');
-      // Show error to user if needed
       if (mounted) {
         DialogHelper.showErrorMessage(
           context: context,
@@ -71,7 +66,15 @@ class _AppCoordinatorState extends State<AppCoordinator> {
     }
   }
 
-  // ... rest of the code remains the same ...
+  @override
+  void dispose() {
+    _contactRepository.dispose();
+    super.dispose();
+  }
+
+  // ============================================
+  // TAB SELECTION LOGIC
+  // ============================================
 
   void _selectTab(TabItem tabItem) {
     if (tabItem == _currentTab) {
@@ -81,7 +84,24 @@ class _AppCoordinatorState extends State<AppCoordinator> {
     }
   }
 
+  // ============================================
+  // NAVIGATION CALLBACKS
+  // ============================================
+
   void _onProfileCreated(Map<String, String> profileData) {
+    // Create a new contact from the profile data
+    final newContact = Contact(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: profileData['name']!,
+      email: profileData['email']!,
+      phone: profileData['phone'],
+      avatarUrl: '',
+      avatarColor: profileData['color'] ?? 'blue',
+    );
+
+    // Add to repository (will automatically update streams)
+    _contactRepository.addContact(newContact);
+
     DialogHelper.showSuccessMessage(
       context: context,
       message: 'Profile created: ${profileData['name']}',
@@ -106,6 +126,18 @@ class _AppCoordinatorState extends State<AppCoordinator> {
     DialogHelper.showAddContactModal(
       context: context,
       onSave: (data) {
+        final newContact = Contact(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: data['name']!,
+          email: data['email']!,
+          phone: data['phone'],
+          avatarUrl: '',
+          avatarColor: 'blue',
+        );
+
+        // Add to repository (will automatically update streams)
+        _contactRepository.addContact(newContact);
+
         DialogHelper.showSuccessMessage(
           context: context,
           message: 'Contact added: ${data['name']}',
@@ -124,6 +156,10 @@ class _AppCoordinatorState extends State<AppCoordinator> {
       message: 'Settings feature coming soon',
     );
   }
+
+  // ============================================
+  // BUILD METHODS
+  // ============================================
 
   @override
   Widget build(BuildContext context) {

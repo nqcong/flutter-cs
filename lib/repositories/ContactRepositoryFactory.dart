@@ -1,32 +1,34 @@
-
+import 'package:contact/data/data_source/ContactDataSource.dart';
 import 'package:contact/data/data_source/ContactLocalDataSource.dart';
 import 'package:contact/data/data_source/ContactRemoteDataSource.dart';
 import 'package:contact/data/storage/JSONStorageService.dart';
 import 'package:contact/repositories/ContactRepository.dart';
 import 'package:contact/repositories/ContactRepositoryImpl.dart';
 
-enum DataSourceType {
-  local,
-  remote,
-}
+enum DataSourceType { local, remote }
 
 class ContactRepositoryFactory {
   static ContactRepository create({
     DataSourceType type = DataSourceType.local,
   }) {
+    ContactDataSource dataSource;
+
     switch (type) {
       case DataSourceType.local:
-        return ContactRepositoryImpl(
-          dataSource: ContactLocalDataSource(
-            storageService: JsonStorageService(),
-          ),
+        dataSource = ContactLocalDataSource(
+          storageService: JsonStorageService(),
         );
-      
+        break;
+
       case DataSourceType.remote:
-        return ContactRepositoryImpl(
-          dataSource: ContactRemoteDataSource(),
+        dataSource = ContactRemoteDataSource(
+          // apiClient: ApiClient(),
+          // baseUrl: 'https://api.example.com',
         );
+        break;
     }
+
+    return ContactRepositoryImpl(dataSource: dataSource);
   }
 
   // Create repository with local data source (default)
@@ -39,11 +41,11 @@ class ContactRepositoryFactory {
     return create(type: DataSourceType.remote);
   }
 
-  // Create repository with both local and remote (sync strategy)
-  // This could be used for offline-first approach
+  // Create repository with sync strategy (local + remote)
+  // This could implement offline-first approach
   static Future<ContactRepository> createWithSync() async {
     // TODO: Implement sync strategy
-    // For now, just return local
+    // Could use local as primary and sync with remote
     return createLocal();
   }
 }

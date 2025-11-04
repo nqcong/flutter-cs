@@ -15,8 +15,7 @@ class NavigationHelper {
 
   NavigationHelper({required this.contactRepository});
 
-  // ... rest remains the same ...
-
+  // Build route for each tab
   Map<TabItem, WidgetBuilder> getRouteBuilders({
     required Function(Map<String, String>) onProfileCreated,
     required Function(Contact) onNavigateToContactDetail,
@@ -41,6 +40,7 @@ class NavigationHelper {
     };
   }
 
+  // Handle back button press
   static Future<bool> handleBackPress({
     required TabItem currentTab,
     required Map<TabItem, GlobalKey<NavigatorState>> navigatorKeys,
@@ -59,6 +59,7 @@ class NavigationHelper {
     return isFirstRouteInCurrentTab;
   }
 
+  // Build offstage navigator
   static Widget buildOffstageNavigator({
     required TabItem tabItem,
     required TabItem currentTab,

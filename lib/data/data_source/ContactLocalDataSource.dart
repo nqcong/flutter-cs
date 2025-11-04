@@ -1,58 +1,164 @@
 import 'package:contact/data/data_source/ContactDataSource.dart';
 import 'package:contact/data/storage/JSONStorageService.dart';
+import 'package:contact/model/ContactFilterModel.dart';
 import 'package:contact/model/contact.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:rxdart/rxdart.dart';
 
 class ContactLocalDataSource implements ContactDataSource {
   final JsonStorageService _storageService;
 
+  // Main contacts stream - BehaviorSubject holds current state
+  final BehaviorSubject<List<Contact>> _contactsSubject =
+      BehaviorSubject<List<Contact>>.seeded([]);
+
+  // Event stream for operations
+  final PublishSubject<ContactEvent> _eventSubject =
+      PublishSubject<ContactEvent>();
+
   ContactLocalDataSource({JsonStorageService? storageService})
-    : _storageService = storageService ?? JsonStorageService();
+    : _storageService = storageService ?? JsonStorageService() {
+    _initialize();
+  }
 
-  // Helper method to read contacts from JSON
-  Future<List<Contact>> _readContactsFromJson() async {
+  void _initialize() {
+    // Listen to events and handle them
+    _eventSubject.listen(_handleEvent);
+
+    // Load initial data
+    _loadInitialContacts();
+  }
+
+  Future<void> _loadInitialContacts() async {
     try {
-      final data = await _storageService.readJson();
-      final contactsList = data['contacts'] as List<dynamic>? ?? [];
-
-      print('Read ${contactsList.length} contacts from JSON');
-
-      return contactsList
-          .map((json) => Contact.fromJson(json as Map<String, dynamic>))
-          .toList();
+      final contacts = await _readContactsFromJson();
+      _contactsSubject.add(contacts);
+      print('Loaded ${contacts.length} contacts from local storage');
     } catch (e) {
-      print('Error in _readContactsFromJson: $e');
-      return [];
+      print('Error loading initial contacts: $e');
+      _contactsSubject.addError(e);
     }
   }
 
-  // Helper method to write contacts to JSON
-  Future<void> _writeContactsToJson(List<Contact> contacts) async {
-    try {
-      // Convert contacts to JSON maps
-      final contactJsonList = contacts.map((c) => c.toJson()).toList();
+  // ============================================
+  // STREAMS IMPLEMENTATION
+  // ============================================
 
-      print('Converting ${contacts.length} contacts to JSON');
+  @override
+  Stream<List<Contact>> get contactsStream => _contactsSubject.stream;
 
-      // Create the data structure
-      final data = <String, dynamic>{'contacts': contactJsonList};
+  @override
+  List<Contact> get currentContacts => _contactsSubject.value;
 
-      // Write to file
-      await _storageService.writeJson(data);
-
-      print('Successfully wrote ${contacts.length} contacts to JSON');
-    } catch (e) {
-      print('Error in _writeContactsToJson: $e');
-      rethrow;
-    }
+  @override
+  Stream<ContactStatistics> get statisticsStream {
+    return contactsStream.map((contacts) {
+      return ContactStatistics(
+        total: contacts.length,
+        favorites: contacts.where((c) => c.isFavorite).length,
+        withPhone: contacts
+            .where((c) => c.phone != null && c.phone!.isNotEmpty)
+            .length,
+        withoutPhone: contacts
+            .where((c) => c.phone == null || c.phone!.isEmpty)
+            .length,
+      );
+    });
   }
+
+  @override
+  Stream<List<Contact>> get favoritesStream {
+    return contactsStream.map((contacts) {
+      return contacts.where((c) => c.isFavorite).toList();
+    });
+  }
+
+  @override
+  Stream<List<Contact>> searchContacts(Stream<String> queryStream) {
+    return queryStream
+        .debounceTime(const Duration(milliseconds: 300))
+        .distinct()
+        .switchMap((query) {
+          if (query.isEmpty) {
+            return contactsStream;
+          }
+
+          return contactsStream.map((contacts) {
+            final lowercaseQuery = query.toLowerCase();
+            return contacts.where((contact) {
+              return contact.name.toLowerCase().contains(lowercaseQuery) ||
+                  contact.email.toLowerCase().contains(lowercaseQuery) ||
+                  (contact.phone?.toLowerCase().contains(lowercaseQuery) ??
+                      false);
+            }).toList();
+          });
+        });
+  }
+
+  @override
+  Stream<List<Contact>> getFilteredContacts(ContactFilter filter) {
+    return contactsStream.map((contacts) {
+      var filtered = List<Contact>.from(contacts);
+
+      // Apply search filter
+      if (filter.searchQuery != null && filter.searchQuery!.isNotEmpty) {
+        final query = filter.searchQuery!.toLowerCase();
+        filtered = filtered.where((contact) {
+          return contact.name.toLowerCase().contains(query) ||
+              contact.email.toLowerCase().contains(query) ||
+              (contact.phone?.toLowerCase().contains(query) ?? false);
+        }).toList();
+      }
+
+      // Apply favorites filter
+      if (filter.favoritesOnly == true) {
+        filtered = filtered.where((c) => c.isFavorite).toList();
+      }
+
+      // Apply color filter
+      if (filter.colorFilter != null && filter.colorFilter!.isNotEmpty) {
+        filtered = filtered
+            .where((c) => c.avatarColor == filter.colorFilter)
+            .toList();
+      }
+
+      // Apply sorting
+      if (filter.sortType != null) {
+        switch (filter.sortType!) {
+          case ContactSortType.nameAsc:
+            filtered.sort((a, b) => a.name.compareTo(b.name));
+            break;
+          case ContactSortType.nameDesc:
+            filtered.sort((a, b) => b.name.compareTo(a.name));
+            break;
+          case ContactSortType.emailAsc:
+            filtered.sort((a, b) => a.email.compareTo(b.email));
+            break;
+          case ContactSortType.emailDesc:
+            filtered.sort((a, b) => b.email.compareTo(a.email));
+            break;
+          case ContactSortType.recentlyAdded:
+            filtered.sort((a, b) => b.id.compareTo(a.id));
+            break;
+          case ContactSortType.oldestFirst:
+            filtered.sort((a, b) => a.id.compareTo(b.id));
+            break;
+        }
+      }
+
+      return filtered;
+    });
+  }
+
+  // ============================================
+  // CRUD OPERATIONS IMPLEMENTATION
+  // ============================================
 
   @override
   Future<List<Contact>> getContacts() async {
     try {
-      // Simulate network delay
       await Future.delayed(const Duration(milliseconds: 300));
-
-      return await _readContactsFromJson();
+      return currentContacts;
     } catch (e) {
       print('Error getting contacts: $e');
       throw Exception('Failed to load contacts');
@@ -62,144 +168,56 @@ class ContactLocalDataSource implements ContactDataSource {
   @override
   Future<Contact> getContactById(String id) async {
     try {
-      final contacts = await _readContactsFromJson();
-
-      return contacts.firstWhere(
-        (contact) => contact.id == id,
+      final contact = currentContacts.firstWhere(
+        (c) => c.id == id,
         orElse: () => throw Exception('Contact not found'),
       );
+      return contact;
     } catch (e) {
       print('Error getting contact by id: $e');
-      throw Exception('Contact not found');
+      rethrow;
     }
   }
 
   @override
   Future<Contact> addContact(Contact contact) async {
-    try {
-      final contacts = await _readContactsFromJson();
-
-      // Check if contact with same id already exists
-      if (contacts.any((c) => c.id == contact.id)) {
-        throw Exception('Contact with this ID already exists');
-      }
-
-      contacts.add(contact);
-      await _writeContactsToJson(contacts);
-
-      print('Contact added: ${contact.name}');
-      return contact;
-    } catch (e) {
-      print('Error adding contact: $e');
-      throw Exception('Failed to add contact');
-    }
+    _eventSubject.add(AddContactEvent(contact));
+    return contact;
   }
 
   @override
   Future<Contact> updateContact(Contact contact) async {
-    try {
-      final contacts = await _readContactsFromJson();
-
-      final index = contacts.indexWhere((c) => c.id == contact.id);
-      if (index == -1) {
-        throw Exception('Contact not found');
-      }
-
-      contacts[index] = contact;
-      await _writeContactsToJson(contacts);
-
-      print('Contact updated: ${contact.name}');
-      return contact;
-    } catch (e) {
-      print('Error updating contact: $e');
-      throw Exception('Failed to update contact');
-    }
+    _eventSubject.add(UpdateContactEvent(contact));
+    return contact;
   }
 
   @override
   Future<void> deleteContact(String id) async {
-    try {
-      final contacts = await _readContactsFromJson();
-
-      final beforeCount = contacts.length;
-      contacts.removeWhere((c) => c.id == id);
-      final afterCount = contacts.length;
-
-      if (beforeCount == afterCount) {
-        throw Exception('Contact not found');
-      }
-
-      await _writeContactsToJson(contacts);
-      print('Contact deleted: $id');
-    } catch (e) {
-      print('Error deleting contact: $e');
-      throw Exception('Failed to delete contact');
-    }
+    _eventSubject.add(DeleteContactEvent(id));
   }
 
   @override
-  Future<List<Contact>> searchContacts(String query) async {
-    try {
-      final contacts = await _readContactsFromJson();
-
-      if (query.isEmpty) return contacts;
-
-      final lowercaseQuery = query.toLowerCase();
-      final results = contacts.where((contact) {
-        return contact.name.toLowerCase().contains(lowercaseQuery) ||
-            contact.email.toLowerCase().contains(lowercaseQuery) ||
-            (contact.phone?.toLowerCase().contains(lowercaseQuery) ?? false);
-      }).toList();
-
-      print('Search for "$query" returned ${results.length} results');
-      return results;
-    } catch (e) {
-      print('Error searching contacts: $e');
-      throw Exception('Failed to search contacts');
-    }
+  Future<Contact> toggleFavorite(String id) async {
+    _eventSubject.add(ToggleFavoriteEvent(id));
+    final contact = await getContactById(id);
+    return contact;
   }
 
   @override
   Future<void> clearAllContacts() async {
-    try {
-      await _writeContactsToJson([]);
-      print('All contacts cleared');
-    } catch (e) {
-      print('Error clearing contacts: $e');
-      throw Exception('Failed to clear contacts');
-    }
+    _eventSubject.add(ClearAllContactsEvent());
   }
 
-  // Additional helper methods for local storage
-
-  Future<bool> hasContacts() async {
-    try {
-      final contacts = await _readContactsFromJson();
-      return contacts.isNotEmpty;
-    } catch (e) {
-      print('Error checking hasContacts: $e');
-      return false;
-    }
-  }
-
+  @override
   Future<int> getContactCount() async {
-    try {
-      final contacts = await _readContactsFromJson();
-      return contacts.length;
-    } catch (e) {
-      print('Error getting contact count: $e');
-      return 0;
-    }
+    return currentContacts.length;
   }
 
+  @override
   Future<void> initializeWithSampleData() async {
     try {
-      print('Checking if initialization is needed...');
-
-      final hasData = await hasContacts();
-
-      if (!hasData) {
-        print('No contacts found, initializing with sample data...');
+      if (currentContacts.isEmpty) {
+        print('Initializing with sample data...');
 
         final sampleContacts = <Contact>[
           const Contact(
@@ -245,21 +263,115 @@ class ContactLocalDataSource implements ContactDataSource {
         ];
 
         await _writeContactsToJson(sampleContacts);
-        print(
-          'Sample data initialized successfully with ${sampleContacts.length} contacts',
-        );
-      } else {
-        print('Contacts already exist, skipping initialization');
+        _contactsSubject.add(sampleContacts);
+        print('Sample data initialized successfully');
       }
     } catch (e) {
       print('Error initializing sample data: $e');
-      // Don't throw - let the app continue even if initialization fails
     }
   }
 
-  // Debug helper - print file path
-  Future<void> printFilePath() async {
-    final path = await _storageService.getFilePath();
-    print('Contacts file path: $path');
+  // ============================================
+  // PRIVATE HELPERS
+  // ============================================
+
+  Future<void> _handleEvent(ContactEvent event) async {
+    try {
+      final currentContacts = List<Contact>.from(_contactsSubject.value);
+
+      if (event is AddContactEvent) {
+        if (currentContacts.any((c) => c.id == event.contact.id)) {
+          throw Exception('Contact with this ID already exists');
+        }
+        currentContacts.add(event.contact);
+      } else if (event is UpdateContactEvent) {
+        final index = currentContacts.indexWhere(
+          (c) => c.id == event.contact.id,
+        );
+        if (index == -1) throw Exception('Contact not found');
+        currentContacts[index] = event.contact;
+      } else if (event is DeleteContactEvent) {
+        currentContacts.removeWhere((c) => c.id == event.contactId);
+      } else if (event is ToggleFavoriteEvent) {
+        final index = currentContacts.indexWhere(
+          (c) => c.id == event.contactId,
+        );
+        if (index != -1) {
+          currentContacts[index] = currentContacts[index].copyWith(
+            isFavorite: !currentContacts[index].isFavorite,
+          );
+        }
+      } else if (event is ClearAllContactsEvent) {
+        currentContacts.clear();
+      }
+
+      // Save to storage
+      await _writeContactsToJson(currentContacts);
+
+      // Emit new state
+      _contactsSubject.add(currentContacts);
+    } catch (e) {
+      print('Error handling event: $e');
+      _contactsSubject.addError(e);
+    }
+  }
+
+  Future<List<Contact>> _readContactsFromJson() async {
+    try {
+      final data = await _storageService.readJson();
+      final contactsList = data['contacts'] as List<dynamic>? ?? [];
+
+      return contactsList
+          .map((json) => Contact.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('Error reading contacts from JSON: $e');
+      return [];
+    }
+  }
+
+  Future<void> _writeContactsToJson(List<Contact> contacts) async {
+    try {
+      final contactJsonList = contacts.map((c) => c.toJson()).toList();
+      final data = <String, dynamic>{'contacts': contactJsonList};
+      await _storageService.writeJson(data);
+    } catch (e) {
+      print('Error writing contacts to JSON: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  void dispose() {
+    _contactsSubject.close();
+    _eventSubject.close();
   }
 }
+
+// ============================================
+// EVENT CLASSES
+// ============================================
+
+abstract class ContactEvent {}
+
+class AddContactEvent extends ContactEvent {
+  final Contact contact;
+  AddContactEvent(this.contact);
+}
+
+class UpdateContactEvent extends ContactEvent {
+  final Contact contact;
+  UpdateContactEvent(this.contact);
+}
+
+class DeleteContactEvent extends ContactEvent {
+  final String contactId;
+  DeleteContactEvent(this.contactId);
+}
+
+class ToggleFavoriteEvent extends ContactEvent {
+  final String contactId;
+  ToggleFavoriteEvent(this.contactId);
+}
+
+class ClearAllContactsEvent extends ContactEvent {}

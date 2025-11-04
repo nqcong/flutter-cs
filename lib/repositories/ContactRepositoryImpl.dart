@@ -1,12 +1,45 @@
 import 'package:contact/data/data_source/ContactDataSource.dart';
+import 'package:contact/model/ContactFilterModel.dart';
 import 'package:contact/model/contact.dart';
 import 'package:contact/repositories/ContactRepository.dart';
+
+// lib/data/repositories/contact_repository_impl.dart
+
+import 'package:rxdart/rxdart.dart';
 
 class ContactRepositoryImpl implements ContactRepository {
   final ContactDataSource _dataSource;
 
   ContactRepositoryImpl({required ContactDataSource dataSource})
     : _dataSource = dataSource;
+
+  // ============================================
+  // STREAMS - Delegate to data source
+  // ============================================
+
+  @override
+  Stream<List<Contact>> get contactsStream => _dataSource.contactsStream;
+
+  @override
+  Stream<ContactStatistics> get statisticsStream =>
+      _dataSource.statisticsStream;
+
+  @override
+  Stream<List<Contact>> get favoritesStream => _dataSource.favoritesStream;
+
+  @override
+  Stream<List<Contact>> searchContacts(Stream<String> queryStream) {
+    return _dataSource.searchContacts(queryStream);
+  }
+
+  @override
+  Stream<List<Contact>> getFilteredContacts(ContactFilter filter) {
+    return _dataSource.getFilteredContacts(filter);
+  }
+
+  // ============================================
+  // CRUD OPERATIONS - Delegate to data source
+  // ============================================
 
   @override
   Future<List<Contact>> fetchContacts() async {
@@ -68,21 +101,9 @@ class ContactRepositoryImpl implements ContactRepository {
   @override
   Future<Contact> toggleFavorite(String id) async {
     try {
-      final contact = await _dataSource.getContactById(id);
-      final updatedContact = contact.copyWith(isFavorite: !contact.isFavorite);
-      return await _dataSource.updateContact(updatedContact);
+      return await _dataSource.toggleFavorite(id);
     } catch (e) {
       print('Repository error toggling favorite: $e');
-      rethrow;
-    }
-  }
-
-  @override
-  Future<List<Contact>> searchContacts(String query) async {
-    try {
-      return await _dataSource.searchContacts(query);
-    } catch (e) {
-      print('Repository error searching contacts: $e');
       rethrow;
     }
   }
@@ -100,11 +121,15 @@ class ContactRepositoryImpl implements ContactRepository {
   @override
   Future<int> getContactCount() async {
     try {
-      final contacts = await _dataSource.getContacts();
-      return contacts.length;
+      return await _dataSource.getContactCount();
     } catch (e) {
       print('Repository error getting contact count: $e');
       return 0;
     }
+  }
+
+  @override
+  void dispose() {
+    _dataSource.dispose();
   }
 }
