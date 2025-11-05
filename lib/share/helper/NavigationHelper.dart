@@ -1,6 +1,6 @@
 // lib/coordinator/helpers/navigation_helper.dart
 
-import 'package:contact/blocs/ContactList/ContactListCubit.dart';
+import 'package:contact/blocs/contactList/ContactListCubit.dart';
 import 'package:contact/coordinator/TabItem.dart';
 import 'package:contact/model/contact.dart';
 import 'package:contact/repositories/ContactRepository.dart';

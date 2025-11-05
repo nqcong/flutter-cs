@@ -1,23 +1,15 @@
 // lib/screens/contact_list/contact_list_screen.dart
 
-import 'package:contact/blocs/ContactList/ContactListCubit.dart';
-import 'package:contact/blocs/ContactList/ContactListState.dart';
-import 'package:contact/data/data_source/ContactDataSource.dart';
-import 'package:contact/model/ContactFilterModel.dart';
-import 'package:contact/model/contact.dart';
-import 'package:contact/share/widget/ContactCardItem.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:contact/blocs/contactList/ContactListCubit.dart';
+import 'package:contact/blocs/contactList/ContactListState.dart';
+import 'package:contact/data/data_source/ContactDataSource.dart';
+import 'package:contact/model/ContactFilterModel.dart';
+import 'package:contact/share/widget/ContactCardItem.dart';
 
 class ContactListScreen extends StatefulWidget {
-  final Function(Contact) onNavigateToContactDetail;
-  final VoidCallback onNavigateToAddContact;
-
-  const ContactListScreen({
-    Key? key,
-    required this.onNavigateToContactDetail,
-    required this.onNavigateToAddContact,
-  }) : super(key: key);
+  const ContactListScreen({Key? key}) : super(key: key);
 
   @override
   State<ContactListScreen> createState() => _ContactListScreenState();
@@ -25,12 +17,6 @@ class ContactListScreen extends StatefulWidget {
 
 class _ContactListScreenState extends State<ContactListScreen> {
   final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    context.read<ContactListCubit>().loadContacts();
-  }
 
   @override
   void dispose() {
@@ -54,12 +40,11 @@ class _ContactListScreenState extends State<ContactListScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
+      builder: (modalContext) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle
             Container(
               width: 40,
               height: 4,
@@ -78,31 +63,25 @@ class _ContactListScreenState extends State<ContactListScreen> {
               'Name (A-Z)',
               ContactSortType.nameAsc,
               cubit.currentSortType,
+              cubit,
             ),
             _buildSortOption(
               'Name (Z-A)',
               ContactSortType.nameDesc,
               cubit.currentSortType,
+              cubit,
             ),
             _buildSortOption(
               'Email (A-Z)',
               ContactSortType.emailAsc,
               cubit.currentSortType,
+              cubit,
             ),
             _buildSortOption(
               'Email (Z-A)',
               ContactSortType.emailDesc,
               cubit.currentSortType,
-            ),
-            _buildSortOption(
-              'Recently Added',
-              ContactSortType.recentlyAdded,
-              cubit.currentSortType,
-            ),
-            _buildSortOption(
-              'Oldest First',
-              ContactSortType.oldestFirst,
-              cubit.currentSortType,
+              cubit,
             ),
           ],
         ),
@@ -114,6 +93,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
     String label,
     ContactSortType sortType,
     ContactSortType? currentSortType,
+    ContactListCubit cubit,
   ) {
     final isSelected = sortType == currentSortType;
 
@@ -126,7 +106,11 @@ class _ContactListScreenState extends State<ContactListScreen> {
       selectedTileColor: Colors.green.shade50,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       onTap: () {
-        context.read<ContactListCubit>().changeSortType(sortType);
+        if (isSelected) {
+          cubit.changeSortType(null);
+        } else {
+          cubit.changeSortType(sortType);
+        }
         Navigator.pop(context);
       },
     );
@@ -136,7 +120,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar( 
+      appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
@@ -148,78 +132,66 @@ class _ContactListScreenState extends State<ContactListScreen> {
           ),
         ),
         actions: [
-          // Favorites filter toggle
-          BlocBuilder<ContactListCubit, ContactListState>(
-            builder: (context, state) {
-              final cubit = context.read<ContactListCubit>();
-              return IconButton(
-                icon: Icon(
-                  cubit.showingFavoritesOnly
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  color: cubit.showingFavoritesOnly ? Colors.red : Colors.black,
-                ),
-                onPressed: () {
-                  cubit.toggleFavoritesFilter();
-                },
-                tooltip: 'Toggle Favorites',
-              );
-            },
-          ),
-          // Sort button
           IconButton(
             icon: const Icon(Icons.sort, color: Colors.black),
             onPressed: _showSortOptions,
             tooltip: 'Sort',
           ),
-          // Add button
           IconButton(
             icon: const Icon(Icons.add, color: Colors.black),
-            onPressed: widget.onNavigateToAddContact,
+            onPressed: () {
+              context.read<ContactListCubit>().onAddContactButtonTapped();
+            },
             tooltip: 'Add Contact',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Statistics Banner (using RxDart stream)
-          StreamBuilder<ContactStatistics>(
-            stream: context.read<ContactListCubit>().statisticsStream,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
+          // Statistics Banner
+          BlocBuilder<ContactListCubit, ContactListState>(
+            builder: (context, state) {
+              final cubit = context.read<ContactListCubit>();
 
-              final stats = snapshot.data!;
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  border: Border(
-                    bottom: BorderSide(color: Colors.blue.shade100),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      'Total',
-                      stats.total.toString(),
-                      Icons.contacts,
+              return StreamBuilder<ContactStatistics>(
+                stream: cubit.statisticsStream,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox.shrink();
+
+                  final stats = snapshot.data!;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    _buildStatItem(
-                      'Favorites',
-                      stats.favorites.toString(),
-                      Icons.favorite,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      border: Border(
+                        bottom: BorderSide(color: Colors.blue.shade100),
+                      ),
                     ),
-                    _buildStatItem(
-                      'With Phone',
-                      stats.withPhone.toString(),
-                      Icons.phone,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem(
+                          'Total',
+                          stats.total.toString(),
+                          Icons.contacts,
+                        ),
+                        _buildStatItem(
+                          'Favorites',
+                          stats.favorites.toString(),
+                          Icons.favorite,
+                        ),
+                        _buildStatItem(
+                          'With Phone',
+                          stats.withPhone.toString(),
+                          Icons.phone,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -259,33 +231,35 @@ class _ContactListScreenState extends State<ContactListScreen> {
             ),
           ),
 
-          // Active Filters Display
+          // Active Sort Display
           BlocBuilder<ContactListCubit, ContactListState>(
             builder: (context, state) {
               final cubit = context.read<ContactListCubit>();
-              final filter = cubit.currentFilter;
+              final sortType = cubit.currentSortType;
 
-              if (!filter.hasFilters) return const SizedBox.shrink();
+              if (sortType == null) return const SizedBox.shrink();
 
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Wrap(
-                  spacing: 8,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
                   children: [
-                    if (filter.favoritesOnly == true)
-                      Chip(
-                        label: const Text('Favorites'),
-                        deleteIcon: const Icon(Icons.close, size: 18),
-                        onDeleted: () => cubit.toggleFavoritesFilter(),
+                    Text(
+                      'Sorted by: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
                       ),
-                    if (filter.sortType != null &&
-                        filter.sortType != ContactSortType.nameAsc)
-                      Chip(
-                        label: Text(_getSortLabel(filter.sortType!)),
-                        deleteIcon: const Icon(Icons.close, size: 18),
-                        onDeleted: () =>
-                            cubit.changeSortType(ContactSortType.nameAsc),
-                      ),
+                    ),
+                    Chip(
+                      avatar: const Icon(Icons.sort, size: 16),
+                      label: Text(_getSortLabel(sortType)),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () => cubit.clearSortFilter(),
+                      backgroundColor: Colors.blue.shade50,
+                    ),
                   ],
                 ),
               );
@@ -294,21 +268,7 @@ class _ContactListScreenState extends State<ContactListScreen> {
 
           // Contact List
           Expanded(
-            child: BlocConsumer<ContactListCubit, ContactListState>(
-              listener: (context, state) {
-                if (state is ContactListError) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.message),
-                      backgroundColor: Colors.red,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
-                }
-              },
+            child: BlocBuilder<ContactListCubit, ContactListState>(
               builder: (context, state) {
                 if (state is ContactListLoading) {
                   return const Center(child: CircularProgressIndicator());
@@ -416,8 +376,11 @@ class _ContactListScreenState extends State<ContactListScreen> {
                         final contact = contacts[index];
                         return ContactCardItem(
                           contact: contact,
-                          onTap: () =>
-                              widget.onNavigateToContactDetail(contact),
+                          onTap: () {
+                            context.read<ContactListCubit>().onContactTapped(
+                              contact,
+                            );
+                          },
                         );
                       },
                     ),
@@ -464,10 +427,6 @@ class _ContactListScreenState extends State<ContactListScreen> {
         return 'Email (A-Z)';
       case ContactSortType.emailDesc:
         return 'Email (Z-A)';
-      case ContactSortType.recentlyAdded:
-        return 'Recently Added';
-      case ContactSortType.oldestFirst:
-        return 'Oldest First';
     }
   }
 }

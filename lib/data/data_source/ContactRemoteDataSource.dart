@@ -123,16 +123,6 @@ class ContactRemoteDataSource implements ContactDataSource {
         }).toList();
       }
 
-      if (filter.favoritesOnly == true) {
-        filtered = filtered.where((c) => c.isFavorite).toList();
-      }
-
-      if (filter.colorFilter != null && filter.colorFilter!.isNotEmpty) {
-        filtered = filtered
-            .where((c) => c.avatarColor == filter.colorFilter)
-            .toList();
-      }
-
       if (filter.sortType != null) {
         switch (filter.sortType!) {
           case ContactSortType.nameAsc:
@@ -146,12 +136,6 @@ class ContactRemoteDataSource implements ContactDataSource {
             break;
           case ContactSortType.emailDesc:
             filtered.sort((a, b) => b.email.compareTo(a.email));
-            break;
-          case ContactSortType.recentlyAdded:
-            filtered.sort((a, b) => b.id.compareTo(a.id));
-            break;
-          case ContactSortType.oldestFirst:
-            filtered.sort((a, b) => a.id.compareTo(b.id));
             break;
         }
       }

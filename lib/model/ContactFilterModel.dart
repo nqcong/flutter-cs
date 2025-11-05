@@ -1,52 +1,36 @@
+// lib/models/contact_filter.dart
+
 import 'package:equatable/equatable.dart';
 
-enum ContactSortType {
-  nameAsc,
-  nameDesc,
-  emailAsc,
-  emailDesc,
-  recentlyAdded,
-  oldestFirst,
-}
+enum ContactSortType { nameAsc, nameDesc, emailAsc, emailDesc }
 
 class ContactFilter extends Equatable {
   final String? searchQuery;
-  final bool? favoritesOnly;
   final ContactSortType? sortType;
-  final String? colorFilter;
 
-  const ContactFilter({
-    this.searchQuery,
-    this.favoritesOnly,
-    this.sortType,
-    this.colorFilter,
-  });
+  const ContactFilter({this.searchQuery, this.sortType});
 
+  // Fixed copyWith that properly handles null values
   ContactFilter copyWith({
     String? searchQuery,
-    bool? favoritesOnly,
     ContactSortType? sortType,
-    String? colorFilter,
+    bool clearSearchQuery = false,
+    bool clearSortType = false,
   }) {
     return ContactFilter(
-      searchQuery: searchQuery ?? this.searchQuery,
-      favoritesOnly: favoritesOnly ?? this.favoritesOnly,
-      sortType: sortType ?? this.sortType,
-      colorFilter: colorFilter ?? this.colorFilter,
+      searchQuery: clearSearchQuery ? null : (searchQuery ?? this.searchQuery),
+      sortType: clearSortType ? null : (sortType ?? this.sortType),
     );
   }
 
   bool get hasFilters =>
-      searchQuery != null ||
-      favoritesOnly == true ||
-      sortType != null ||
-      colorFilter != null;
+      (searchQuery != null && searchQuery!.isNotEmpty) || sortType != null;
 
   @override
-  List<Object?> get props => [
-    searchQuery,
-    favoritesOnly,
-    sortType,
-    colorFilter,
-  ];
+  List<Object?> get props => [searchQuery, sortType];
+
+  @override
+  String toString() {
+    return 'ContactFilter(searchQuery: $searchQuery, sortType: $sortType)';
+  }
 }

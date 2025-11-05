@@ -110,18 +110,6 @@ class ContactLocalDataSource implements ContactDataSource {
         }).toList();
       }
 
-      // Apply favorites filter
-      if (filter.favoritesOnly == true) {
-        filtered = filtered.where((c) => c.isFavorite).toList();
-      }
-
-      // Apply color filter
-      if (filter.colorFilter != null && filter.colorFilter!.isNotEmpty) {
-        filtered = filtered
-            .where((c) => c.avatarColor == filter.colorFilter)
-            .toList();
-      }
-
       // Apply sorting
       if (filter.sortType != null) {
         switch (filter.sortType!) {
@@ -136,12 +124,6 @@ class ContactLocalDataSource implements ContactDataSource {
             break;
           case ContactSortType.emailDesc:
             filtered.sort((a, b) => b.email.compareTo(a.email));
-            break;
-          case ContactSortType.recentlyAdded:
-            filtered.sort((a, b) => b.id.compareTo(a.id));
-            break;
-          case ContactSortType.oldestFirst:
-            filtered.sort((a, b) => a.id.compareTo(b.id));
             break;
         }
       }

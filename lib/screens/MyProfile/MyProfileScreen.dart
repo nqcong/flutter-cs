@@ -1,15 +1,13 @@
 // lib/screens/my_profile/my_profile_screen.dart
+import 'package:contact/coordinator/AppRoutes.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class MyProfileScreen extends StatelessWidget {
-  final VoidCallback onNavigateToEditProfile;
-  final VoidCallback onNavigateToSettings;
+  final GoRouter router;
 
-  const MyProfileScreen({
-    Key? key,
-    required this.onNavigateToEditProfile,
-    required this.onNavigateToSettings,
-  }) : super(key: key);
+  const MyProfileScreen({Key? key, required this.router}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +27,9 @@ class MyProfileScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.black),
-            onPressed: onNavigateToSettings,
+            onPressed: () {
+              router.push(AppRoutes.settings);
+            },
           ),
         ],
       ),
@@ -67,7 +67,9 @@ class MyProfileScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: onNavigateToEditProfile,
+                onPressed: () {
+                  router.go(AppRoutes.createProfile);
+                },
                 icon: const Icon(Icons.edit),
                 label: const Text('Edit Profile'),
                 style: ElevatedButton.styleFrom(
@@ -87,28 +89,40 @@ class MyProfileScreen extends StatelessWidget {
 
             // Menu Items
             _buildMenuItem(
+              context,
               icon: Icons.contacts,
               title: 'My Contacts',
               subtitle: '45 contacts',
-              onTap: () {},
+              onTap: () {
+                router.go(AppRoutes.contactList);
+              },
             ),
             _buildMenuItem(
+              context,
               icon: Icons.favorite,
               title: 'Favorites',
               subtitle: '12 contacts',
-              onTap: () {},
+              onTap: () {
+                // Navigate to favorites
+              },
             ),
             _buildMenuItem(
+              context,
               icon: Icons.history,
               title: 'Recent Activity',
               subtitle: 'Last 7 days',
-              onTap: () {},
+              onTap: () {
+                // Navigate to activity
+              },
             ),
             _buildMenuItem(
+              context,
               icon: Icons.backup,
               title: 'Backup & Sync',
               subtitle: 'Last synced 2 hours ago',
-              onTap: () {},
+              onTap: () {
+                // Navigate to backup
+              },
             ),
           ],
         ),
@@ -152,7 +166,8 @@ class MyProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem({
+  Widget _buildMenuItem(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
